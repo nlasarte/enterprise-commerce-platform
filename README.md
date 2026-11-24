@@ -84,6 +84,34 @@ tests against PostgreSQL 17 through Testcontainers and requires Docker.
 Testcontainers provisions its own database, so Compose can stay stopped for
 both commands. GitHub Actions runs `verify` for Customer Service changes.
 
+## Inventory Service API
+
+Start `inventory-db` with Docker Compose and run `.\mvnw.cmd spring-boot:run`
+from `services/inventory-service`. The API listens on port `8082`.
+
+| Method | Path | Request body | Success |
+| --- | --- | --- | --- |
+| POST | `/api/v1/products` | `sku`, `name`, optional `description` | `201` with the product |
+| GET | `/api/v1/products` | | `200` with products sorted by SKU |
+| GET | `/api/v1/products/{id}` | | `200` with the product |
+| GET | `/api/v1/inventory/{productId}` | | `200` with available and reserved quantities |
+| POST | `/api/v1/inventory/{productId}/restock` | `quantity` | `200` with the updated stock |
+| POST | `/api/v1/reservations` | `productId`, `orderId`, `quantity` | `201` for a new reservation, `200` for a retry |
+| GET | `/api/v1/reservations/{id}` | | `200` with the reservation |
+| POST | `/api/v1/reservations/{id}/confirm` | | `200` with the confirmed reservation |
+| POST | `/api/v1/reservations/{id}/release` | | `200` with the released reservation |
+
+Quantities are positive integers and IDs are UUIDs. A new product starts with
+zero stock. Reserving stock moves units from available to reserved. Confirming
+consumes the reserved units. Releasing returns them to available stock.
+
+A reservation retry with the same order, product, and quantity returns the
+existing reservation in its current state. Repeating the same final action
+also returns the existing state. A changed reservation quantity, the opposite
+final action, insufficient stock, or a duplicate SKU returns `409 Conflict`.
+Invalid requests return `400 Bad Request` and missing resources return
+`404 Not Found`.
+
 ## Roadmap
 
 1. Customer Service
