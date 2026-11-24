@@ -1,0 +1,19 @@
+services:
+  customer-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: customers
+      POSTGRES_USER: ${CUSTOMER_DB_USER:-customer_app}
+      POSTGRES_PASSWORD: ${CUSTOMER_DB_PASSWORD:-customer_local}
+    ports:
+      - "127.0.0.1:${CUSTOMER_DB_PORT:-5432}:5432"
+    volumes:
+      - customer-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  customer-db-data:

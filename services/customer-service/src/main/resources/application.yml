@@ -1,0 +1,18 @@
+server:
+  address: ${CUSTOMER_SERVICE_BIND_ADDRESS:127.0.0.1}
+  port: ${CUSTOMER_SERVICE_PORT:8080}
+
+spring:
+  application:
+    name: customer-service
+  datasource:
+    url: ${CUSTOMER_DB_URL:jdbc:postgresql://127.0.0.1:5432/customers}
+    username: ${CUSTOMER_DB_USER:customer_app}
+    password: ${CUSTOMER_DB_PASSWORD:customer_local}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  mvc:
+    problemdetails:
+      enabled: true
