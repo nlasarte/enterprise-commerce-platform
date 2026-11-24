@@ -15,5 +15,25 @@ services:
       timeout: 3s
       retries: 10
 
+  inventory-db:
+    image: postgres:16
+    container_name: inventory-db
+    environment:
+      POSTGRES_DB: inventory_db
+      POSTGRES_USER: inventory_user
+      POSTGRES_PASSWORD: ${INVENTORY_DB_PASSWORD:-inventory_password}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - inventory-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U inventory_user -d inventory_db
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   customer-db-data:
+  inventory-data:
