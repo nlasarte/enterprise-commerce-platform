@@ -84,17 +84,34 @@ tests against PostgreSQL 17 through Testcontainers and requires Docker.
 Testcontainers provisions its own database, so Compose can stay stopped for
 both commands. GitHub Actions runs `verify` for Customer Service changes.
 
-## Inventory Service API
+## Inventory Service
 
-Start `inventory-db` with Docker Compose and run `.\mvnw.cmd spring-boot:run`
-from `services/inventory-service`. The API listens on port `8082`.
+The Inventory Service manages product information, stock availability, and
+reservations. It normalizes new SKUs to uppercase and validates requests
+with Jakarta Bean Validation. Errors use RFC 9457 Problem Details. Domain
+unit tests cover zero stock, restocking, invalid quantities, and overflow.
+
+### Local configuration
+
+Start the database and service from the repository root.
+
+```powershell
+docker compose -f infrastructure/docker-compose.yml up -d --wait inventory-db
+Set-Location services/inventory-service
+.\mvnw.cmd spring-boot:run
+```
+
+The API listens on port `8082`. Its PostgreSQL database is `inventory_db`
+on local port `5433`.
+
+### REST API
 
 | Method | Path | Request body | Success |
 | --- | --- | --- | --- |
 | POST | `/api/v1/products` | `sku`, `name`, optional `description` | `201` with the product |
 | GET | `/api/v1/products` | | `200` with products sorted by SKU |
 | GET | `/api/v1/products/{id}` | | `200` with the product |
-| GET | `/api/v1/inventory/{productId}` | | `200` with available and reserved quantities |
+| GET | `/api/v1/inventory/{productId}` | | `200` with the SKU and available and reserved quantities |
 | POST | `/api/v1/inventory/{productId}/restock` | `quantity` | `200` with the updated stock |
 | POST | `/api/v1/reservations` | `productId`, `orderId`, `quantity` | `201` for a new reservation, `200` for a retry |
 | GET | `/api/v1/reservations/{id}` | | `200` with the reservation |
@@ -111,6 +128,18 @@ also returns the existing state. A changed reservation quantity, the opposite
 final action, insufficient stock, or a duplicate SKU returns `409 Conflict`.
 Invalid requests return `400 Bad Request` and missing resources return
 `404 Not Found`.
+
+### Architecture decisions
+
+Product metadata and stock quantities live in separate tables to isolate their
+update patterns. Product creation and zero-stock initialization share one
+transaction. JPA `@Version` detects stale inventory updates. Reservation
+operations also lock the inventory row while checking stock and updating the
+reservation. PostgreSQL constraints enforce SKU uniqueness and nonnegative
+stock. Inventory Service owns its database and applies schema changes through
+Flyway.
+
+Integration with Order Service through REST and Kafka is planned.
 
 ## Roadmap
 

@@ -6,6 +6,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.portfolio.commerce.inventory.application.InventoryService;
+import com.portfolio.commerce.inventory.persistence.InventoryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,12 +16,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -44,6 +51,15 @@ class InventoryServiceApplicationTests {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private InventoryRepository inventory;
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @BeforeEach
     void clearDatabase() {
         jdbc.execute("TRUNCATE TABLE stock_reservations, inventory, products");
@@ -61,11 +77,48 @@ class InventoryServiceApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sku").value("ITEM-001"));
         assertStock(id, 0, 0);
+        mvc.perform(get(INVENTORY + "/" + id)).andExpect(jsonPath("$.sku").value("ITEM-001"));
         postJson(PRODUCTS, """
-                {"sku":"ITEM-001","name":"Another product"}
+                {"sku":" item-001 ","name":"Another product"}
                 """)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("The SKU already exists."));
+                .andExpect(jsonPath("$.title").value("Duplicate SKU"))
+                .andExpect(jsonPath("$.detail").value("A product with SKU ITEM-001 already exists"));
+        restock(id, 100);
+        assertStock(id, 100, 0);
+        assertThat(jdbc.queryForObject("SELECT version FROM inventory WHERE product_id = ?", Long.class,
+                UUID.fromString(id))).isEqualTo(1L);
+    }
+
+    @Test
+    void rollsBackProductCreationWhenInventoryInitializationFails() throws Exception {
+        jdbc.execute("ALTER TABLE inventory ADD CONSTRAINT test_reject_inventory CHECK (false)");
+        try {
+            postJson(PRODUCTS, """
+                    {"sku":"ROLLBACK-001","name":"Product"}
+                    """)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.title").value("Data integrity conflict"));
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM products", Integer.class)).isZero();
+        } finally {
+            jdbc.execute("ALTER TABLE inventory DROP CONSTRAINT test_reject_inventory");
+        }
+    }
+
+    @Test
+    void rejectsAStaleInventoryUpdate() throws Exception {
+        UUID productId = UUID.fromString(createProduct());
+        TransactionTemplate outer = new TransactionTemplate(transactionManager);
+        TransactionTemplate inner = new TransactionTemplate(transactionManager);
+        inner.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        assertThatThrownBy(() -> outer.executeWithoutResult(outerStatus -> {
+            var staleStock = inventory.findByProduct_Id(productId).orElseThrow();
+            inner.executeWithoutResult(innerStatus -> inventoryService.restock(productId, 100));
+            staleStock.restock(50);
+        })).isInstanceOf(OptimisticLockingFailureException.class);
+
+        assertStock(productId.toString(), 100, 0);
     }
 
     @Test
@@ -77,7 +130,8 @@ class InventoryServiceApplicationTests {
         mvc.perform(post(RESERVATIONS + "/" + missing + "/confirm")).andExpect(status().isNotFound());
         postJson(PRODUCTS, """
                 {"sku":" ","name":"Product"}
-                """).andExpect(status().isBadRequest());
+                """).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.sku").value("SKU is required"));
         postJson(INVENTORY + "/" + missing + "/restock", """
                 {"quantity":0}
                 """).andExpect(status().isBadRequest());
@@ -192,7 +246,7 @@ class InventoryServiceApplicationTests {
 
     private String createProduct() throws Exception {
         JsonNode product = responseBody(postJson(PRODUCTS, """
-                {"sku":"ITEM-001","name":"Product","description":"A test product"}
+                {"sku":" item-001 ","name":"Product","description":"A test product"}
                 """).andExpect(status().isCreated()).andExpect(header().exists("Location")));
         return product.get("id").asText();
     }

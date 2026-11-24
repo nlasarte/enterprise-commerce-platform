@@ -1,20 +1,17 @@
-package com.portfolio.commerce.inventory;
+package com.portfolio.commerce.inventory.domain;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.portfolio.commerce.inventory.exception.InventoryConflictException;
+import jakarta.persistence.*;
+import lombok.Getter;
 
 @Entity
 @Table(name = "stock_reservations")
-class StockReservation {
+@Getter
+public class StockReservation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -32,8 +29,12 @@ class StockReservation {
     protected StockReservation() {
     }
 
-    StockReservation(UUID productId, UUID orderId, int quantity) {
-        this.productId = productId;
+    public StockReservation(Inventory inventory, UUID orderId, int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Reservation quantity must be greater than zero");
+        }
+        inventory.reserve(quantity);
+        this.productId = inventory.getProduct().getId();
         this.orderId = orderId;
         this.quantity = quantity;
         this.status = Status.RESERVED;
@@ -41,13 +42,13 @@ class StockReservation {
         this.updatedAt = createdAt;
     }
 
-    void checkQuantity(int requestedQuantity) {
+    public void checkQuantity(int requestedQuantity) {
         if (quantity != requestedQuantity) {
             throw new InventoryConflictException("This order has a reservation for a different quantity.");
         }
     }
 
-    void apply(Status target, Inventory inventory) {
+    public void apply(Status target, Inventory inventory) {
         if (status == target) {
             return;
         }
@@ -63,15 +64,7 @@ class StockReservation {
         updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
-    enum Status {
+    public enum Status {
         RESERVED, CONFIRMED, RELEASED
-    }
-
-    ReservationView view() {
-        return new ReservationView(id, productId, orderId, quantity, status, createdAt, updatedAt);
-    }
-
-    record ReservationView(UUID id, UUID productId, UUID orderId, int quantity, Status status,
-                           Instant createdAt, Instant updatedAt) {
     }
 }
