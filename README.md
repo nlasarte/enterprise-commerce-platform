@@ -113,21 +113,37 @@ on local port `5433`.
 | GET | `/api/v1/products/{id}` | | `200` with the product |
 | GET | `/api/v1/inventory/{productId}` | | `200` with the SKU and available and reserved quantities |
 | POST | `/api/v1/inventory/{productId}/restock` | `quantity` | `200` with the updated stock |
-| POST | `/api/v1/reservations` | `productId`, `orderId`, `quantity` | `201` for a new reservation, `200` for a retry |
+
+### Stock Reservation Management
+
+| Method | Path | Request body | Success |
+| --- | --- | --- | --- |
+| POST | `/api/v1/reservations` | `productId`, `orderId`, `quantity` | `201` with the reservation and a `Location` header |
 | GET | `/api/v1/reservations/{id}` | | `200` with the reservation |
 | POST | `/api/v1/reservations/{id}/confirm` | | `200` with the confirmed reservation |
 | POST | `/api/v1/reservations/{id}/release` | | `200` with the released reservation |
 
-Quantities are positive integers and IDs are UUIDs. A new product starts with
-zero stock. Reserving stock moves units from available to reserved. Confirming
-consumes the reserved units. Releasing returns them to available stock.
+Quantities are positive integers and IDs are UUIDs. The order ID is an
+external reference.
 
-A reservation retry with the same order, product, and quantity returns the
-existing reservation in its current state. Repeating the same final action
-also returns the existing state. A changed reservation quantity, the opposite
-final action, insufficient stock, or a duplicate SKU returns `409 Conflict`.
-Invalid requests return `400 Bad Request` and missing resources return
-`404 Not Found`.
+- `RESERVED` moves units from available stock to reserved stock.
+- `CONFIRMED` consumes the reserved units.
+- `RELEASED` returns the reserved units to available stock.
+
+Stock and reservation changes commit or roll back together. PostgreSQL
+enforces nonnegative quantities and one reservation per order and product.
+Duplicate creation requests, insufficient stock, and attempts to change a
+terminal state return `409 Conflict`. Repeating the same confirm or release
+returns `200 OK` without changing stock. Invalid requests return
+`400 Bad Request` and missing resources return `404 Not Found`.
+
+Domain tests cover stock arithmetic and state transitions. Mockito tests
+cover service orchestration. PostgreSQL Testcontainers tests cover
+persistence, rollback after SQL execution, competing allocations, and
+simultaneous confirmation and release.
+
+Planned work includes creation-request idempotency, automatic expiration and
+release, Saga coordination with Order Service, and Kafka events.
 
 ### Architecture decisions
 

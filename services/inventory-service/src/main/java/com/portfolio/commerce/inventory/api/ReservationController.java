@@ -6,11 +6,11 @@ import java.util.UUID;
 import com.portfolio.commerce.inventory.api.dto.ReservationRequest;
 import com.portfolio.commerce.inventory.api.dto.ReservationResponse;
 import com.portfolio.commerce.inventory.application.ReservationService;
-import com.portfolio.commerce.inventory.domain.StockReservation.Status;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @RequestMapping(ReservationController.PATH)
@@ -22,11 +22,10 @@ public class ReservationController {
 
     @PostMapping
     public ResponseEntity<ReservationResponse> reserve(@Valid @RequestBody ReservationRequest request) {
-        var result = reservations.reserve(request);
-        if (result.created()) {
-            return ResponseEntity.created(URI.create(PATH + "/" + result.reservation().id())).body(result.reservation());
-        }
-        return ResponseEntity.ok(result.reservation());
+        ReservationResponse reservation = reservations.reserve(request);
+        URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")
+                .buildAndExpand(reservation.id()).toUri();
+        return ResponseEntity.created(location).body(reservation);
     }
 
     @GetMapping("/{id}")
@@ -36,11 +35,11 @@ public class ReservationController {
 
     @PostMapping("/{id}/confirm")
     public ReservationResponse confirm(@PathVariable UUID id) {
-        return reservations.finalizeReservation(id, Status.CONFIRMED);
+        return reservations.confirm(id);
     }
 
     @PostMapping("/{id}/release")
     public ReservationResponse release(@PathVariable UUID id) {
-        return reservations.finalizeReservation(id, Status.RELEASED);
+        return reservations.release(id);
     }
 }

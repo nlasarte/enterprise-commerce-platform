@@ -3,7 +3,7 @@ package com.portfolio.commerce.inventory.domain;
 import java.util.Objects;
 import java.util.UUID;
 
-import com.portfolio.commerce.inventory.exception.InventoryConflictException;
+import com.portfolio.commerce.inventory.exception.InsufficientStockException;
 import jakarta.persistence.*;
 import lombok.Getter;
 
@@ -37,28 +37,45 @@ public class Inventory {
     }
 
     public void restock(int quantity) {
-        if (quantity <= 0) {
-            throw new IllegalArgumentException("Restock quantity must be greater than zero");
-        }
-        // Include reserved stock so releasing it can never overflow available stock.
-        Math.addExact(Math.addExact(availableQuantity, reservedQuantity), quantity);
-        availableQuantity += quantity;
+        validatePositiveQuantity(quantity);
+        int newAvailableQuantity = Math.addExact(availableQuantity, quantity);
+        Math.addExact(newAvailableQuantity, reservedQuantity);
+        availableQuantity = newAvailableQuantity;
     }
 
-    void reserve(int quantity) {
+    public void reserve(int quantity) {
+        validatePositiveQuantity(quantity);
         if (availableQuantity < quantity) {
-            throw new InventoryConflictException("Insufficient available stock.");
+            throw new InsufficientStockException(quantity, availableQuantity);
         }
+        int newReservedQuantity = Math.addExact(reservedQuantity, quantity);
         availableQuantity -= quantity;
-        reservedQuantity += quantity;
+        reservedQuantity = newReservedQuantity;
     }
 
-    void confirm(int quantity) {
+    public void confirmReservation(int quantity) {
+        validatePositiveQuantity(quantity);
+        validateReservedQuantity(quantity);
         reservedQuantity -= quantity;
     }
 
-    void release(int quantity) {
+    public void releaseReservation(int quantity) {
+        validatePositiveQuantity(quantity);
+        validateReservedQuantity(quantity);
+        int newAvailableQuantity = Math.addExact(availableQuantity, quantity);
         reservedQuantity -= quantity;
-        availableQuantity += quantity;
+        availableQuantity = newAvailableQuantity;
+    }
+
+    private static void validatePositiveQuantity(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than zero");
+        }
+    }
+
+    private void validateReservedQuantity(int quantity) {
+        if (reservedQuantity < quantity) {
+            throw new IllegalStateException("Reserved stock is lower than the requested quantity");
+        }
     }
 }

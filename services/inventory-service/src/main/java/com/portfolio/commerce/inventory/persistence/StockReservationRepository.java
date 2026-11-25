@@ -9,8 +9,10 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface StockReservationRepository extends JpaRepository<StockReservation, UUID> {
 
-    Optional<StockReservation> findByProductIdAndOrderId(UUID productId, UUID orderId);
+    boolean existsByOrderIdAndProduct_Id(UUID orderId, UUID productId);
 
-    @Query("select r.productId from StockReservation r where r.id = :id")
+    Optional<StockReservation> findByOrderIdAndProduct_Id(UUID orderId, UUID productId);
+
+    @Query("select r.product.id from StockReservation r where r.id = :id")
     Optional<UUID> findProductId(UUID id);
 }

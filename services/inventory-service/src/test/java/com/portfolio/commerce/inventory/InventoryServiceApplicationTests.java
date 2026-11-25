@@ -152,10 +152,13 @@ class InventoryServiceApplicationTests {
         assertStock(productId, 6, 4);
 
         requestReservation(productId, orderId, 4)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Duplicate reservation"));
         requestReservation(productId, orderId, 5).andExpect(status().isConflict());
-        requestReservation(productId, UUID.randomUUID().toString(), 7).andExpect(status().isConflict());
+        requestReservation(productId, UUID.randomUUID().toString(), 7)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Insufficient stock"))
+                .andExpect(jsonPath("$.detail").value("Insufficient stock. Requested: 7, available: 6"));
 
         mvc.perform(get(RESERVATIONS + "/" + id))
                 .andExpect(status().isOk())
@@ -165,7 +168,8 @@ class InventoryServiceApplicationTests {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("CONFIRMED"));
         }
-        mvc.perform(post(RESERVATIONS + "/" + id + "/release")).andExpect(status().isConflict());
+        mvc.perform(post(RESERVATIONS + "/" + id + "/release")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Invalid reservation state"));
         assertStock(productId, 6, 0);
     }
 

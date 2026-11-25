@@ -58,9 +58,19 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Data integrity conflict", "The operation violates a database constraint");
     }
 
-    @ExceptionHandler(InventoryConflictException.class)
-    public ProblemDetail handleInventoryConflict(InventoryConflictException exception) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+    @ExceptionHandler(InsufficientStockException.class)
+    public ProblemDetail handleInsufficientStock(InsufficientStockException exception) {
+        return problem(HttpStatus.CONFLICT, "Insufficient stock", exception.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateReservationException.class)
+    public ProblemDetail handleDuplicateReservation(DuplicateReservationException exception) {
+        return problem(HttpStatus.CONFLICT, "Duplicate reservation", exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidReservationStateException.class)
+    public ProblemDetail handleInvalidReservationState(InvalidReservationStateException exception) {
+        return problem(HttpStatus.CONFLICT, "Invalid reservation state", exception.getMessage());
     }
 
     private static ProblemDetail problem(HttpStatus status, String title, String detail) {

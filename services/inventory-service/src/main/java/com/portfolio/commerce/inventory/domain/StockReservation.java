@@ -2,69 +2,74 @@ package com.portfolio.commerce.inventory.domain;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 import java.util.UUID;
 
-import com.portfolio.commerce.inventory.exception.InventoryConflictException;
+import com.portfolio.commerce.inventory.exception.InvalidReservationStateException;
 import jakarta.persistence.*;
 import lombok.Getter;
 
 @Entity
-@Table(name = "stock_reservations")
+@Table(name = "stock_reservations", uniqueConstraints = @UniqueConstraint(
+        name = "uq_order_product", columnNames = {"order_id", "product_id"}))
 @Getter
 public class StockReservation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-    private UUID productId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "product_id", nullable = false, updatable = false)
+    private Product product;
+
+    @Column(name = "order_id", nullable = false, updatable = false)
     private UUID orderId;
+
+    @Column(nullable = false, updatable = false)
     private int quantity;
 
     @Enumerated(EnumType.STRING)
-    private Status status;
+    @Column(nullable = false, length = 20)
+    private ReservationStatus status;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     protected StockReservation() {
     }
 
-    public StockReservation(Inventory inventory, UUID orderId, int quantity) {
+    public StockReservation(Product product, UUID orderId, int quantity) {
         if (quantity <= 0) {
             throw new IllegalArgumentException("Reservation quantity must be greater than zero");
         }
-        inventory.reserve(quantity);
-        this.productId = inventory.getProduct().getId();
-        this.orderId = orderId;
+        this.product = Objects.requireNonNull(product);
+        this.orderId = Objects.requireNonNull(orderId);
         this.quantity = quantity;
-        this.status = Status.RESERVED;
+        this.status = ReservationStatus.RESERVED;
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         this.updatedAt = createdAt;
     }
 
-    public void checkQuantity(int requestedQuantity) {
-        if (quantity != requestedQuantity) {
-            throw new InventoryConflictException("This order has a reservation for a different quantity.");
-        }
+    public boolean confirm() {
+        return transitionTo(ReservationStatus.CONFIRMED);
     }
 
-    public void apply(Status target, Inventory inventory) {
+    public boolean release() {
+        return transitionTo(ReservationStatus.RELEASED);
+    }
+
+    private boolean transitionTo(ReservationStatus target) {
         if (status == target) {
-            return;
+            return false;
         }
-        if (status != Status.RESERVED) {
-            throw new InventoryConflictException("This reservation is already " + status + ".");
-        }
-        switch (target) {
-            case CONFIRMED -> inventory.confirm(quantity);
-            case RELEASED -> inventory.release(quantity);
-            case RESERVED -> throw new IllegalArgumentException("Expected a final reservation status.");
+        if (status != ReservationStatus.RESERVED) {
+            throw new InvalidReservationStateException(status, target);
         }
         status = target;
         updatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
-    }
-
-    public enum Status {
-        RESERVED, CONFIRMED, RELEASED
+        return true;
     }
 }
