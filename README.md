@@ -132,8 +132,9 @@ external reference.
 
 Stock and reservation changes commit or roll back together. PostgreSQL
 enforces nonnegative quantities and one reservation per order and product.
-Duplicate creation requests, insufficient stock, and attempts to change a
-terminal state return `409 Conflict`. Repeating the same confirm or release
+Duplicate order and product reservations, insufficient stock, and attempts to
+change a terminal state return `409 Conflict`. Matching idempotent retries
+replay the original creation response. Repeating the same confirm or release
 returns `200 OK` without changing stock. Invalid requests return
 `400 Bad Request` and missing resources return `404 Not Found`.
 
@@ -142,8 +143,8 @@ cover service orchestration. PostgreSQL Testcontainers tests cover
 persistence, rollback after SQL execution, competing allocations, and
 simultaneous confirmation and release.
 
-Planned work includes creation-request idempotency, automatic expiration and
-release, Saga coordination with Order Service, and Kafka events.
+Planned work includes automatic expiration and release, Saga coordination
+with Order Service, and Kafka events.
 
 ### Architecture decisions
 
@@ -168,8 +169,56 @@ stale reservations with fresh inventory, restock races, and duplicate
 creation. See [ADR-001](docs/decisions/ADR-001-inventory-concurrency-control.md)
 for the alternatives and trade-offs.
 
-Automatic retries, creation-request idempotency, production load testing,
-and multi-product reservations remain future work.
+Server-side automatic retries, production load testing, and multi-product
+reservations remain future work.
+
+### Reservation idempotency
+
+Send an optional `Idempotency-Key` with `POST /api/v1/reservations`. Generate
+the key once per logical reservation and reuse it with the same payload for
+every retry.
+
+```http
+POST /api/v1/reservations
+Content-Type: application/json
+Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+
+{
+  "orderId": "b4ed7f7a-512a-4e27-98a7-34f93655d001",
+  "productId": "b4ed7f7a-512a-4e27-98a7-34f93655d002",
+  "quantity": 20
+}
+```
+
+| Scenario | Result |
+| --- | --- |
+| New key and valid request | `201 Created` with `Idempotency-Replayed: false` |
+| Same key and payload | Original status, `Location`, and JSON body with `Idempotency-Replayed: true` |
+| Same key and different payload | `409 Conflict` with `IDEMPOTENCY_KEY_CONFLICT` |
+| Invalid key | `400 Bad Request` with `INVALID_IDEMPOTENCY_KEY` |
+| Different key for an existing order and product | `409 Conflict` |
+| Rolled-back transaction | The key is available for another attempt |
+| Missing key | Standard reservation creation |
+
+Keys accept 1–128 characters using ASCII letters, digits, dots, underscores,
+colons, and hyphens. A replay returns the original creation status in the
+body. Use `GET /api/v1/reservations/{id}` for the current reservation state.
+
+PostgreSQL coordinates concurrent claims with `INSERT ... ON CONFLICT DO NOTHING`.
+The service hashes validated fields using SHA-256 and saves the original
+response in the same transaction as the reservation and stock update.
+Concurrent PostgreSQL tests exercise commits, replays, and rollbacks.
+
+For network failures and transient concurrency errors, retry with the same
+key, bounded exponential backoff, and jitter. The [PowerShell reference
+client](scripts/Invoke-IdempotentReservation.ps1) implements this policy.
+See [ADR-002](docs/decisions/ADR-002-reservation-idempotency.md) for design
+trade-offs and the guarantee boundary.
+
+The feature covers reservation creation only. Authenticated tenant scoping,
+retention cleanup, production load testing, and distributed event
+deduplication remain future work.
+
 
 Integration with Order Service through REST and Kafka is planned.
 

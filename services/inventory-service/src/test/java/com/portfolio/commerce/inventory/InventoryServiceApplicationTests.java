@@ -62,7 +62,7 @@ class InventoryServiceApplicationTests {
 
     @BeforeEach
     void clearDatabase() {
-        jdbc.execute("TRUNCATE TABLE stock_reservations, inventory, products");
+        jdbc.execute("TRUNCATE TABLE idempotency_records, stock_reservations, inventory, products");
     }
 
     @Test

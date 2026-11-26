@@ -7,8 +7,11 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -53,6 +56,30 @@ public class GlobalExceptionHandler {
                 "The resource was modified by another transaction. Retrieve its current state before retrying.");
         problem.setProperty("errorCode", "CONCURRENT_MODIFICATION");
         return problem;
+    }
+
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    public ProblemDetail handleInvalidIdempotencyKey(InvalidIdempotencyKeyException exception) {
+        ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, "Invalid idempotency key", exception.getMessage());
+        problem.setProperty("errorCode", "INVALID_IDEMPOTENCY_KEY");
+        return problem;
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ProblemDetail handleIdempotencyConflict(IdempotencyConflictException exception) {
+        ProblemDetail problem = problem(HttpStatus.CONFLICT, "Idempotency key conflict", exception.getMessage());
+        problem.setProperty("errorCode", "IDEMPOTENCY_KEY_CONFLICT");
+        return problem;
+    }
+
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleDatabaseLock(PessimisticLockingFailureException exception) {
+        ProblemDetail problem = problem(HttpStatus.SERVICE_UNAVAILABLE, "Temporary database contention",
+                "The operation could not complete due to temporary database contention.");
+        problem.setProperty("errorCode", "TRANSIENT_DATABASE_CONFLICT");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, "1")
+                .body(problem);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

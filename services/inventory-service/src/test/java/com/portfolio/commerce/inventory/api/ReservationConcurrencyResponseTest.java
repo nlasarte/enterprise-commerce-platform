@@ -3,6 +3,7 @@ package com.portfolio.commerce.inventory.api;
 import java.util.UUID;
 
 import com.portfolio.commerce.inventory.application.ReservationService;
+import com.portfolio.commerce.inventory.application.idempotency.IdempotentReservationService;
 import com.portfolio.commerce.inventory.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -23,7 +24,8 @@ class ReservationConcurrencyResponseTest {
         UUID id = UUID.randomUUID();
         ReservationService reservations = mock(ReservationService.class);
         when(reservations.confirm(id)).thenThrow(new OptimisticLockingFailureException("Stale reservation"));
-        var mvc = MockMvcBuilders.standaloneSetup(new ReservationController(reservations))
+        var mvc = MockMvcBuilders.standaloneSetup(
+                        new ReservationController(reservations, mock(IdempotentReservationService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
 
