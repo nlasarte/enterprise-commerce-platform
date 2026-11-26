@@ -49,8 +49,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ProblemDetail handleOptimisticLock(OptimisticLockingFailureException exception) {
-        return problem(HttpStatus.CONFLICT, "Concurrent modification",
-                "Inventory was modified by another transaction. Reload the resource before trying again.");
+        ProblemDetail problem = problem(HttpStatus.CONFLICT, "Concurrent modification",
+                "The resource was modified by another transaction. Retrieve its current state before retrying.");
+        problem.setProperty("errorCode", "CONCURRENT_MODIFICATION");
+        return problem;
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

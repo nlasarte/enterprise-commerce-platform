@@ -51,7 +51,7 @@ class ReservationServiceTest {
 
     @Test
     void reservesStockAndPersistsReservation() {
-        lockStock();
+        findStock();
         when(product.getId()).thenReturn(productId);
         when(reservationRepository.saveAndFlush(any(StockReservation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -67,7 +67,7 @@ class ReservationServiceTest {
 
     @Test
     void rejectsDuplicateReservationWithoutChangingStock() {
-        lockStock();
+        findStock();
         when(reservationRepository.existsByOrderIdAndProduct_Id(orderId, productId)).thenReturn(true);
 
         assertThrows(DuplicateReservationException.class,
@@ -78,7 +78,7 @@ class ReservationServiceTest {
 
     @Test
     void rejectsInsufficientStockWithoutSavingReservation() {
-        lockStock();
+        findStock();
 
         assertThrows(InsufficientStockException.class,
                 () -> reservations.reserve(new ReservationRequest(orderId, productId, 200)));
@@ -89,6 +89,7 @@ class ReservationServiceTest {
     @Test
     void confirmsAndConsumesReservedStock() {
         existingReservation();
+        findStock();
         when(product.getId()).thenReturn(productId);
 
         assertEquals(ReservationStatus.CONFIRMED, reservations.confirm(reservationId).status());
@@ -98,6 +99,7 @@ class ReservationServiceTest {
     @Test
     void releasesAndRestoresAvailableStock() {
         existingReservation();
+        findStock();
         when(product.getId()).thenReturn(productId);
 
         assertEquals(ReservationStatus.RELEASED, reservations.release(reservationId).status());
@@ -138,7 +140,7 @@ class ReservationServiceTest {
 
     @Test
     void rejectsUnknownReservation() {
-        when(reservationRepository.findProductId(reservationId)).thenReturn(Optional.empty());
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.empty());
 
         assertThrows(ReservationNotFoundException.class, () -> reservations.confirm(reservationId));
         verifyNoInteractions(inventoryRepository);
@@ -147,14 +149,12 @@ class ReservationServiceTest {
     private StockReservation existingReservation() {
         inventory.reserve(20);
         StockReservation reservation = new StockReservation(product, orderId, 20);
-        when(reservationRepository.findProductId(reservationId)).thenReturn(Optional.of(productId));
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
-        lockStock();
         return reservation;
     }
 
-    private void lockStock() {
-        when(inventoryRepository.lockByProductId(productId)).thenReturn(Optional.of(inventory));
+    private void findStock() {
+        when(inventoryRepository.findByProduct_Id(productId)).thenReturn(Optional.of(inventory));
     }
 
     private void assertStock(int available, int reserved) {

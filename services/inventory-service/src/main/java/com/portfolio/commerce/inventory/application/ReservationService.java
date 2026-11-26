@@ -29,7 +29,7 @@ public class ReservationService {
 
     @Transactional
     public ReservationResponse reserve(ReservationRequest request) {
-        Inventory stock = lockStock(request.productId());
+        Inventory stock = findStock(request.productId());
         if (reservations.existsByOrderIdAndProduct_Id(request.orderId(), request.productId())) {
             throw new DuplicateReservationException(request.orderId(), request.productId());
         }
@@ -62,18 +62,18 @@ public class ReservationService {
 
     private ReservationResponse transition(UUID id, Predicate<StockReservation> change,
                                            ObjIntConsumer<Inventory> updateStock) {
-        // Read the reservation state only after acquiring the product's inventory lock.
-        UUID productId = reservations.findProductId(id).orElseThrow(() -> new ReservationNotFoundException(id));
-        Inventory stock = lockStock(productId);
         StockReservation reservation = findReservation(id);
         if (change.test(reservation)) {
+            Inventory stock = findStock(reservation.getProduct().getId());
+            // Check the reservation version before applying its change to possibly newer inventory.
+            reservations.flush();
             updateStock.accept(stock, reservation.getQuantity());
         }
         return ReservationResponse.from(reservation);
     }
 
-    private Inventory lockStock(UUID productId) {
-        return inventory.lockByProductId(productId).orElseThrow(() -> new InventoryNotFoundException(productId));
+    private Inventory findStock(UUID productId) {
+        return inventory.findByProduct_Id(productId).orElseThrow(() -> new InventoryNotFoundException(productId));
     }
 
     private StockReservation findReservation(UUID id) {

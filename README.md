@@ -149,11 +149,27 @@ release, Saga coordination with Order Service, and Kafka events.
 
 Product metadata and stock quantities live in separate tables to isolate their
 update patterns. Product creation and zero-stock initialization share one
-transaction. JPA `@Version` detects stale inventory updates. Reservation
-operations also lock the inventory row while checking stock and updating the
-reservation. PostgreSQL constraints enforce SKU uniqueness and nonnegative
+transaction. PostgreSQL constraints enforce SKU uniqueness and nonnegative
 stock. Inventory Service owns its database and applies schema changes through
 Flyway.
+
+### Concurrency control
+
+JPA `@Version` on both `Inventory` and `StockReservation` detects stale
+modifications. Stock and reservation state commit or roll back in the same
+transaction. An optimistic locking conflict returns `409 Conflict` with
+`errorCode: CONCURRENT_MODIFICATION`. Repeating a completed confirm or release
+is safe once the client has the current state.
+
+Multithreaded PostgreSQL Testcontainers tests use JUnit 5, `ExecutorService`,
+`CountDownLatch`, and Spring `TransactionTemplate` to force overlapping
+transactions. They verify competing allocations, terminal transitions,
+stale reservations with fresh inventory, restock races, and duplicate
+creation. See [ADR-001](docs/decisions/ADR-001-inventory-concurrency-control.md)
+for the alternatives and trade-offs.
+
+Automatic retries, creation-request idempotency, production load testing,
+and multi-product reservations remain future work.
 
 Integration with Order Service through REST and Kafka is planned.
 

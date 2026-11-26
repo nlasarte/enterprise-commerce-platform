@@ -202,7 +202,7 @@ class InventoryServiceApplicationTests {
     }
 
     @Test
-    void serializesConcurrentReservationsForTheSameProduct() throws Exception {
+    void rejectsOneOfTwoCompetingReservationsForTheSameProduct() throws Exception {
         String productId = createProduct();
         restock(productId, 5);
         CountDownLatch start = new CountDownLatch(1);

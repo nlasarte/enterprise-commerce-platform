@@ -38,6 +38,10 @@ public class StockReservation {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     protected StockReservation() {
     }
 
