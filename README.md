@@ -138,11 +138,6 @@ replay the original creation response. Repeating the same confirm or release
 returns `200 OK` without changing stock. Invalid requests return
 `400 Bad Request` and missing resources return `404 Not Found`.
 
-Domain tests cover stock arithmetic and state transitions. Mockito tests
-cover service orchestration. PostgreSQL Testcontainers tests cover
-persistence, rollback after SQL execution, competing allocations, and
-simultaneous confirmation and release.
-
 Planned work includes automatic expiration and release, Saga coordination
 with Order Service, and Kafka events.
 
@@ -219,6 +214,32 @@ The feature covers reservation creation only. Authenticated tenant scoping,
 retention cleanup, production load testing, and distributed event
 deduplication remain future work.
 
+### Testing and quality gates
+
+Run these commands from `services/inventory-service`.
+
+| Command | Suite |
+| --- | --- |
+| `.\mvnw.cmd test` | JUnit domain tests, Mockito service tests, and MockMvc API contract tests. Docker is unnecessary. |
+| `.\mvnw.cmd clean verify` | All fast tests plus PostgreSQL Testcontainers integration tests and a real HTTP smoke test. Docker must be running. |
+
+| Layer | Coverage |
+| --- | --- |
+| Domain | Product metadata, stock invariants, and reservation transitions |
+| Application | Mockito tests for service decisions, repository calls, and failure handling |
+| MVC slice | Controller-specific MockMvc tests for validation, JSON, status codes, and headers such as `Location`, `Idempotency-Replayed`, and `Retry-After` |
+| PostgreSQL integration | Flyway constraints, transaction rollback, concurrent reservations, and idempotency against Testcontainers |
+| HTTP smoke test | Reservation creation, confirmation, replay, and changed-payload conflict through a running service |
+
+The PostgreSQL suites use `application-test.yml` for their connection pool
+and obtain their database connections from Testcontainers.
+
+Maven Surefire runs `*Test` classes and Failsafe runs `*IT` classes. The
+`verify` phase fails if tests fail or if combined JaCoCo coverage is below
+90% of lines or 70% of branches. The HTML report is at
+`target/site/jacoco/index.html`, with machine-readable coverage in the same
+directory. Test reports are in `target/surefire-reports` and
+`target/failsafe-reports`.
 
 Integration with Order Service through REST and Kafka is planned.
 

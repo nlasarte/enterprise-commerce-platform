@@ -1,10 +1,13 @@
-package com.portfolio.commerce.inventory.application;
+package com.portfolio.commerce.inventory.integration;
 
 import java.util.UUID;
 
 import com.portfolio.commerce.inventory.TestcontainersConfiguration;
 import com.portfolio.commerce.inventory.api.dto.ProductRequest;
 import com.portfolio.commerce.inventory.api.dto.ReservationRequest;
+import com.portfolio.commerce.inventory.application.InventoryService;
+import com.portfolio.commerce.inventory.application.ProductService;
+import com.portfolio.commerce.inventory.application.ReservationService;
 import com.portfolio.commerce.inventory.domain.ReservationStatus;
 import com.portfolio.commerce.inventory.exception.InsufficientStockException;
 import com.portfolio.commerce.inventory.persistence.StockReservationRepository;
@@ -12,13 +15,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
-class ReservationIntegrationTest {
+@ActiveProfiles("test")
+class ReservationTransactionIT {
 
     @Autowired
     private ProductService products;

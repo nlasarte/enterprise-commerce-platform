@@ -25,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import static com.portfolio.commerce.inventory.application.idempotency.IdempotentReservationService.OPERATION;
@@ -34,7 +35,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
-class IdempotencyIntegrationTest {
+@ActiveProfiles("test")
+class IdempotencyIT {
 
     @Autowired
     private ProductService products;

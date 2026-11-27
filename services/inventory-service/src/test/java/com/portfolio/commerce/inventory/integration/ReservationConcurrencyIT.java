@@ -1,4 +1,4 @@
-package com.portfolio.commerce.inventory.application;
+package com.portfolio.commerce.inventory.integration;
 
 import java.util.List;
 import java.util.UUID;
@@ -9,6 +9,9 @@ import java.util.concurrent.TimeUnit;
 import com.portfolio.commerce.inventory.TestcontainersConfiguration;
 import com.portfolio.commerce.inventory.api.dto.ProductRequest;
 import com.portfolio.commerce.inventory.api.dto.ReservationRequest;
+import com.portfolio.commerce.inventory.application.InventoryService;
+import com.portfolio.commerce.inventory.application.ProductService;
+import com.portfolio.commerce.inventory.application.ReservationService;
 import com.portfolio.commerce.inventory.domain.ReservationStatus;
 import com.portfolio.commerce.inventory.domain.StockReservation;
 import com.portfolio.commerce.inventory.exception.DuplicateReservationException;
@@ -19,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,7 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
-class InventoryConcurrencyTest {
+@ActiveProfiles("test")
+class ReservationConcurrencyIT {
 
     private enum Outcome {
         SUCCESS, OPTIMISTIC_CONFLICT, DUPLICATE
