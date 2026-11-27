@@ -238,7 +238,7 @@ integration tests verify atomic rollback and concurrent key ownership.
 
 Maven Surefire runs `*Test` classes and Failsafe runs `*IT` classes. The
 `clean test` baseline is 128 tests, including 35 application-service tests
-and 47 MVC tests. `clean verify` adds 62 integration tests for 190 total.
+and 47 MVC tests. `clean verify` adds 70 integration tests for 198 total.
 
 The `verify` phase fails if tests fail or if combined JaCoCo coverage is below
 90% of lines or 70% of branches. The HTML report is at
@@ -270,6 +270,31 @@ Testcontainers provides PostgreSQL.
 
 Use `.\mvnw.cmd clean verify` to run the complete suite and enforce the
 combined coverage gates.
+
+#### Database constraints and transaction integrity
+
+`DatabaseConstraintsIT` runs 16 PostgreSQL cases. It bypasses the domain model
+with JDBC writes to verify SQLSTATE codes for uniqueness, foreign keys,
+required fields, field length, and quantity and status checks. It also
+checks the completed idempotency response and its reservation reference.
+
+`ReservationTransactionIT` runs 10 cases against PostgreSQL. It verifies
+rollback after SQL execution at each stage of a reservation, atomic commit,
+key reuse, READ COMMITTED visibility, REQUIRED rollback-only propagation,
+stale inventory and reservation versions, and rollback of confirmation and
+release. Direct SQL checks committed records and stock consistency.
+
+Run either suite from `services/inventory-service` with Docker running.
+
+```powershell
+.\mvnw.cmd "-Dit.test=DatabaseConstraintsIT" "-Djacoco.skip=true" verify
+.\mvnw.cmd "-Dit.test=ReservationTransactionIT" "-Djacoco.skip=true" verify
+```
+
+Testcontainers provides PostgreSQL. Run `.\mvnw.cmd clean verify` for the
+complete suite and coverage gates. See
+[ADR-003](docs/decisions/ADR-003-inventory-transaction-integrity.md) for the
+transaction design.
 
 Integration with Order Service through REST and Kafka is planned.
 
