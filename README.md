@@ -229,7 +229,7 @@ Run these commands from `services/inventory-service`.
 | Application | Real domain objects and Mockito repositories exercise SKU normalization, stock changes, reservation transitions, and idempotency orchestration |
 | MVC slice | `@WebMvcTest` and `@MockitoBean` exercise routing, JSON, Jakarta validation, Problem Details, and headers such as `Location`, `Idempotency-Replayed`, and `Retry-After` |
 | PostgreSQL integration | Flyway constraints, transaction rollback, concurrent reservations, and idempotency against Testcontainers |
-| HTTP smoke test | Reservation creation, confirmation, replay, and changed-payload conflict through a running service |
+| Full HTTP integration | Reservation creation, replay, rollback and recovery, concurrent requests, and committed stock invariants through a running service |
 
 The PostgreSQL suites use `application-test.yml` for their connection pool
 and obtain their database connections from Testcontainers.
@@ -238,13 +238,38 @@ integration tests verify atomic rollback and concurrent key ownership.
 
 Maven Surefire runs `*Test` classes and Failsafe runs `*IT` classes. The
 `clean test` baseline is 128 tests, including 35 application-service tests
-and 47 MVC tests. `clean verify` adds 48 integration tests for 176 total.
+and 47 MVC tests. `clean verify` adds 62 integration tests for 190 total.
 
 The `verify` phase fails if tests fail or if combined JaCoCo coverage is below
 90% of lines or 70% of branches. The HTML report is at
 `target/site/jacoco/index.html`, with machine-readable coverage in the same
 directory. Test reports are in `target/surefire-reports` and
 `target/failsafe-reports`.
+
+#### Full HTTP integration testing
+
+`ReservationHttpIT` uses TestRestTemplate against embedded Tomcat on a random
+port and checks committed PostgreSQL rows using JdbcTemplate. It covers
+creation with and without a key, input validation, fingerprint and business
+conflicts, rollback on insufficient stock, retry after restocking, and
+original response replay after confirmation or release.
+
+Eight concurrent identical requests must yield one creation and seven
+replays, backed by one reservation and one completed idempotency record.
+Concurrent requests with the same key and different quantities must yield one
+creation and one fingerprint conflict under normal test conditions. The
+client start gate coordinates the HTTP requests. Deterministic database
+lock and rollback tests remain in the PostgreSQL integration suite.
+
+Run the HTTP suite from `services/inventory-service` with Docker running.
+Testcontainers provides PostgreSQL.
+
+```powershell
+.\mvnw.cmd "-Dit.test=ReservationHttpIT" "-Djacoco.skip=true" verify
+```
+
+Use `.\mvnw.cmd clean verify` to run the complete suite and enforce the
+combined coverage gates.
 
 Integration with Order Service through REST and Kafka is planned.
 
