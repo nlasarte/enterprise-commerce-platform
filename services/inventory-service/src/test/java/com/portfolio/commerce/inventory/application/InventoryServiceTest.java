@@ -9,6 +9,8 @@ import com.portfolio.commerce.inventory.exception.InventoryNotFoundException;
 import com.portfolio.commerce.inventory.persistence.InventoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -60,7 +62,33 @@ class InventoryServiceTest {
     }
 
     @Test
-    void rejectsAnUnknownInventory() {
+    void rejectsRetrievalOfUnknownInventory() {
+        when(inventory.findByProduct_Id(productId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getInventory(productId)).isInstanceOf(InventoryNotFoundException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-10, 0})
+    void rejectsNonpositiveRestockWithoutChangingStock(int quantity) {
+        stock.restock(10);
+        when(inventory.findByProduct_Id(productId)).thenReturn(Optional.of(stock));
+
+        assertThatThrownBy(() -> service.restock(productId, quantity)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(stock.getAvailableQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    void rejectsRestockOverflowWithoutChangingStock() {
+        stock.restock(10);
+        when(inventory.findByProduct_Id(productId)).thenReturn(Optional.of(stock));
+
+        assertThatThrownBy(() -> service.restock(productId, Integer.MAX_VALUE)).isInstanceOf(ArithmeticException.class);
+        assertThat(stock.getAvailableQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    void rejectsRestockOfUnknownInventory() {
         when(inventory.findByProduct_Id(productId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.restock(productId, 5)).isInstanceOf(InventoryNotFoundException.class);

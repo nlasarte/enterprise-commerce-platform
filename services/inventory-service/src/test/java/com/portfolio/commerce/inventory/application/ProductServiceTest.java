@@ -26,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +56,7 @@ class ProductServiceTest {
         assertThat(result.sku()).isEqualTo("ITEM-1");
         assertThat(result.name()).isEqualTo("Test product");
         assertThat(result.description()).isEqualTo("Description");
+        assertThat(result.createdAt()).isNotNull().isEqualTo(product.getValue().getCreatedAt());
         assertThat(stock.getValue().getProduct()).isSameAs(product.getValue());
         assertThat(stock.getValue().getAvailableQuantity()).isZero();
         assertThat(stock.getValue().getReservedQuantity()).isZero();
@@ -75,6 +78,7 @@ class ProductServiceTest {
         assertThatThrownBy(() -> service.createProduct(new ProductRequest("item-1", "Test product", null)))
                 .isInstanceOf(DuplicateSkuException.class);
 
+        verify(products, never()).saveAndFlush(any(Product.class));
         verifyNoInteractions(inventory);
     }
 
@@ -108,6 +112,27 @@ class ProductServiceTest {
                 .thenReturn(List.of(new Product("A", "First", null), new Product("B", "Second", null)));
 
         assertThat(service.getProducts()).extracting(result -> result.sku()).containsExactly("A", "B");
+    }
+
+    @Test
+    void retrievesProductById() {
+        UUID id = UUID.randomUUID();
+        var product = new Product("A", "First", "Description");
+        when(products.findById(id)).thenReturn(Optional.of(product));
+
+        var result = service.getProduct(id);
+
+        assertThat(result.sku()).isEqualTo("A");
+        assertThat(result.name()).isEqualTo("First");
+        assertThat(result.description()).isEqualTo("Description");
+        assertThat(result.createdAt()).isEqualTo(product.getCreatedAt());
+    }
+
+    @Test
+    void returnsAnEmptyProductList() {
+        when(products.findAll(Sort.by("sku"))).thenReturn(List.of());
+
+        assertThat(service.getProducts()).isEmpty();
     }
 
     @Test

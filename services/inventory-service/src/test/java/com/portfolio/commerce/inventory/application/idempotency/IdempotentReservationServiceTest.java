@@ -11,6 +11,7 @@ import com.portfolio.commerce.inventory.api.dto.ReservationResponse;
 import com.portfolio.commerce.inventory.application.ReservationService;
 import com.portfolio.commerce.inventory.domain.ReservationStatus;
 import com.portfolio.commerce.inventory.exception.IdempotencyConflictException;
+import com.portfolio.commerce.inventory.exception.InsufficientStockException;
 import com.portfolio.commerce.inventory.exception.InvalidIdempotencyKeyException;
 import com.portfolio.commerce.inventory.persistence.IdempotencyRecord;
 import com.portfolio.commerce.inventory.persistence.IdempotencyRepository;
@@ -24,6 +25,7 @@ import static com.portfolio.commerce.inventory.application.idempotency.Idempoten
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -104,6 +106,30 @@ class IdempotentReservationServiceTest {
                 .hasMessage("Incomplete committed idempotency record");
 
         verifyNoInteractions(reservations, json);
+    }
+
+    @Test
+    void failsWhenTheExistingClaimCannotBeRead() {
+        when(records.find(OPERATION, KEY)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.reserve(KEY, request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Claimed idempotency record was not found");
+
+        verifyNoInteractions(reservations, json);
+    }
+
+    @Test
+    void propagatesBusinessFailureWithoutCompletingTheClaim() {
+        var failure = new InsufficientStockException(request.quantity(), 0);
+        when(records.tryClaim(OPERATION, KEY, hash)).thenReturn(true);
+        when(reservations.reserve(request)).thenThrow(failure);
+
+        assertThatThrownBy(() -> service.reserve(KEY, request)).isSameAs(failure);
+
+        verify(records).tryClaim(OPERATION, KEY, hash);
+        verifyNoMoreInteractions(records);
+        verifyNoInteractions(json);
     }
 
     @Test

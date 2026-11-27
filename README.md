@@ -214,28 +214,33 @@ The feature covers reservation creation only. Authenticated tenant scoping,
 retention cleanup, production load testing, and distributed event
 deduplication remain future work.
 
-### Testing and quality gates
+### Inventory Service automated testing
 
 Run these commands from `services/inventory-service`.
 
 | Command | Suite |
 | --- | --- |
-| `.\mvnw.cmd test` | JUnit domain tests, Mockito service tests, and MockMvc API contract tests. Docker is unnecessary. |
+| `.\mvnw.cmd clean test` | JUnit domain tests, Mockito service tests, and MockMvc API contract tests. Docker is unnecessary. |
 | `.\mvnw.cmd clean verify` | All fast tests plus PostgreSQL Testcontainers integration tests and a real HTTP smoke test. Docker must be running. |
 
 | Layer | Coverage |
 | --- | --- |
 | Domain | Product metadata, stock invariants, and reservation transitions |
-| Application | Mockito tests for service decisions, repository calls, and failure handling |
-| MVC slice | Controller-specific MockMvc tests for validation, JSON, status codes, and headers such as `Location`, `Idempotency-Replayed`, and `Retry-After` |
+| Application | Real domain objects and Mockito repositories exercise SKU normalization, stock changes, reservation transitions, and idempotency orchestration |
+| MVC slice | `@WebMvcTest` and `@MockitoBean` exercise routing, JSON, Jakarta validation, Problem Details, and headers such as `Location`, `Idempotency-Replayed`, and `Retry-After` |
 | PostgreSQL integration | Flyway constraints, transaction rollback, concurrent reservations, and idempotency against Testcontainers |
 | HTTP smoke test | Reservation creation, confirmation, replay, and changed-payload conflict through a running service |
 
 The PostgreSQL suites use `application-test.yml` for their connection pool
 and obtain their database connections from Testcontainers.
+The MockMvc replay checks verify the response seen by the client. PostgreSQL
+integration tests verify atomic rollback and concurrent key ownership.
 
 Maven Surefire runs `*Test` classes and Failsafe runs `*IT` classes. The
-`verify` phase fails if tests fail or if combined JaCoCo coverage is below
+`clean test` baseline is 128 tests, including 35 application-service tests
+and 47 MVC tests. `clean verify` adds 48 integration tests for 176 total.
+
+The `verify` phase fails if tests fail or if combined JaCoCo coverage is below
 90% of lines or 70% of branches. The HTML report is at
 `target/site/jacoco/index.html`, with machine-readable coverage in the same
 directory. Test reports are in `target/surefire-reports` and

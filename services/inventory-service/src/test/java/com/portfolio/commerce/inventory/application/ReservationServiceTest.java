@@ -40,7 +40,7 @@ class ReservationServiceTest {
     private final UUID productId = UUID.randomUUID();
     private final UUID orderId = UUID.randomUUID();
     private final UUID reservationId = UUID.randomUUID();
-    private final Product product = mock(Product.class);
+    private final Product product = spy(new Product("ITEM-1", "Test product", null));
     private Inventory inventory;
 
     @BeforeEach
@@ -139,10 +139,35 @@ class ReservationServiceTest {
     }
 
     @Test
+    void retrievesReservationWithoutLoadingInventory() {
+        existingReservation();
+        when(product.getId()).thenReturn(productId);
+
+        var reservation = reservations.getReservation(reservationId);
+
+        assertEquals(ReservationStatus.RESERVED, reservation.status());
+        assertEquals(orderId, reservation.orderId());
+        assertEquals(productId, reservation.productId());
+        assertEquals(20, reservation.quantity());
+        verifyNoInteractions(inventoryRepository);
+    }
+
+    @Test
+    void rejectsConfirmationAfterReleaseWithoutChangingStock() {
+        var reservation = existingReservation();
+        reservation.release();
+        inventory.releaseReservation(20);
+
+        assertThrows(InvalidReservationStateException.class, () -> reservations.confirm(reservationId));
+        assertStock(100, 0);
+        verifyNoInteractions(inventoryRepository);
+    }
+
+    @Test
     void rejectsUnknownReservation() {
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.empty());
 
-        assertThrows(ReservationNotFoundException.class, () -> reservations.confirm(reservationId));
+        assertThrows(ReservationNotFoundException.class, () -> reservations.getReservation(reservationId));
         verifyNoInteractions(inventoryRepository);
     }
 
